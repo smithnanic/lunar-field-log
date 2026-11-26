@@ -227,7 +227,7 @@ function save(){
     docRef=ref;
     if(snap.exists){
       const r=snap.data();
-      if((r.updated||0)>(S.updated||0)&&r.log){S=Object.assign(S,JSON.parse(JSON.stringify(r)));S.prefs=Object.assign({},PREFS,S.prefs||{});try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){} mirror=S.prefs.mirror!==false; rebuild();}
+      if((r.updated||0)>(S.updated||0)&&r.log){S=Object.assign(S,JSON.parse(JSON.stringify(r)));S.prefs=Object.assign({},PREFS,S.prefs||{});try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){} mirror=S.prefs.mirror!==false; rebuild(true);}
       else if((S.updated||0)>(r.updated||0)) save();
     } else if(Object.keys(S.log).length) save();
     setSync('Saved to your Claude account, so it follows you between devices.');
@@ -411,8 +411,8 @@ $('bRot').onclick=()=>{rot=!rot;press($('bRot'),rot);refly()};
 $('bHl').onclick=()=>{showHl=!showHl;press($('bHl'),showHl);apply()};
 $('bFit').onclick=()=>{fit(true);$('menu').hidden=true};
 $('bNight').onclick=()=>{press($('bNight'),document.documentElement.classList.toggle('night'))};
-$('when').onchange=e=>{ const p=e.target.value.split('-').map(Number); if(p.length!==3||!p[0]) return; const n=new Date(); live=(p[0]===n.getFullYear()&&p[1]===n.getMonth()+1&&p[2]===n.getDate()); when=live?Date.now():new Date(p[0],p[1]-1,p[2],21,0).getTime(); pos=0; rebuild(); };
-$('bNow').onclick=()=>{when=Date.now();live=true;pos=0;rebuild()};
+$('when').onchange=e=>{ const p=e.target.value.split('-').map(Number); if(p.length!==3||!p[0]) return; const n=new Date(); live=(p[0]===n.getFullYear()&&p[1]===n.getMonth()+1&&p[2]===n.getDate()); when=live?Date.now():new Date(p[0],p[1]-1,p[2],21,0).getTime(); rebuild(true); };
+$('bNow').onclick=()=>{when=Date.now();live=true;rebuild(true)};
 function paintMenu(){
   E=elong(when);
   const lit=Math.round((1-Math.cos(E*R))/2*100);
@@ -506,8 +506,8 @@ $('bCsv').onclick=async()=>{
 };
 
 
-function rebuild(){ paintMenu(); paintShade(); buildQueue(); lastLogged=null; toast=''; paintCard(); if(!$('sheet').hidden) paintSheet(); if(sized) refly(); }
-rebuild();
+function rebuild(start){ paintMenu(); paintShade(); buildQueue(); if(start){ const i=queue.findIndex(q=>!S.log[q.f.id]); pos=i<0?0:i; } lastLogged=null; toast=''; paintCard(); if(!$('sheet').hidden) paintSheet(); if(sized) refly(); }
+rebuild(true);
 </script>
 </body>
 </html>
