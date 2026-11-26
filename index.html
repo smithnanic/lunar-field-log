@@ -15,7 +15,7 @@
   color-scheme: dark;
   --sky:#090c13; --panel:#121724; --panel-2:#1a2132; --line:#2a3348;
   --ink:#dfe3ec; --ink-2:#98a2b8; --ink-3:#69738a;
-  --accent:#f0a93b; --good:#7bd88f; --eye:#2f8fff; --bino:#12e0c4; --scope:#ffae1f;
+  --accent:#f0a93b; --good:#7bd88f; --eye:#7fa6ff; --bino:#4fd6c4; --scope:#ffb13d;
   --display:"Bodoni Moda","Didot","Times New Roman",serif;
   --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"Spline Sans Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -35,11 +35,10 @@ button{cursor:pointer}
 html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-rotate(-28deg)}
 #ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 #hl{stroke-linejoin:round;stroke-linecap:round;animation:pulse 2.2s ease-in-out infinite}
-#hl.p{fill:var(--c);fill-opacity:.45;stroke:var(--c)}
-#hl2{fill:none;stroke:#000;stroke-opacity:.75;stroke-linejoin:round;stroke-linecap:round}
-#hl.l{fill:none;stroke:var(--c);stroke-opacity:.8}
+#hl.p{fill:var(--c);fill-opacity:.3;stroke:var(--c)}
+#hl.l{fill:none;stroke:var(--c);stroke-opacity:.6}
 #hl.n{--c:var(--eye)}#hl.b{--c:var(--bino)}#hl.t{--c:var(--scope)}
-@keyframes pulse{50%{opacity:.72}}
+@keyframes pulse{50%{opacity:.55}}
 #shade{fill:#000;fill-opacity:.8}
 .pin{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font:600 11px/1 var(--mono);pointer-events:none;border:1.5px solid #000;background:#fff;color:#000}
 .site{position:absolute;width:0;height:0;pointer-events:none;transform-origin:0 0}
@@ -123,7 +122,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
     <img id="moon" src="moon.jpg" alt="Full-disc photograph of the moon, north at the top">
     <svg id="ov" viewBox="0 0 1000 1000" aria-hidden="true">
       <path id="shade" d=""></path>
-      <path id="hl2" d="" hidden></path><path id="hl" d="" hidden></path>
+      <path id="hl" d="" hidden></path>
     </svg>
   </div></div>
 </div>
@@ -307,9 +306,8 @@ function apply(anim){
   const u=1000/(W*z), c=current(), f=c&&c.f;
   if(f&&f.shape&&showHl){
     hl.hidden=false; hl.setAttribute('d',f.shape.d); hl.setAttribute('class',f.shape.t+' '+f.tier);
-    const sw = f.shape.t==='l' ? Math.max(f.shape.w,6*u) : 3*u; hl.style.strokeWidth=sw;
-    const h2=$('hl2'); h2.hidden=false; h2.setAttribute('d',f.shape.d); h2.style.strokeWidth=sw+3.5*u;
-  } else { hl.hidden=true; $('hl2').hidden=true; }
+    hl.style.strokeWidth = f.shape.t==='l' ? Math.max(f.shape.w,6*u) : 1.8*u;
+  } else hl.hidden=true;
   const ps=[...pz.querySelectorAll('.site')].map(p=>{ let x=+p.dataset.x,y=+p.dataset.y; if(mirror)x=1-x; if(rot){x=1-x;y=1-y;} p.style.left=(x*100)+'%'; p.style.top=(y*100)+'%'; p.style.transform='scale('+(1/z)+')'; p.hidden=!showHl; return {p,sx:x*W*z,sy:y*W*z}; }).sort((a,b)=>a.sy-b.sy);
   const done=[]; for(const o of ps){ let ly=o.sy; for(const d of done) if(Math.abs(d.sx-o.sx)<34&&ly<d.ly+19&&ly>d.ly-19) ly=d.ly+19; o.ly=ly; done.push(o); o.p.lastChild.style.top=(ly-o.sy-9)+'px'; }
 }
