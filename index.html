@@ -37,7 +37,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
 #hl{stroke-linejoin:round;stroke-linecap:round;animation:pulse 2.2s ease-in-out infinite}
 #hl.p{fill:var(--c);fill-opacity:.3;stroke:var(--c)}
 #hl.l{fill:none;stroke:var(--c);stroke-opacity:.6}
-#hl.n{--c:var(--eye)}#hl.b{--c:var(--bino)}#hl.t{--c:var(--scope)}
+#hl.n{--c:var(--eye)}#hl.b{--c:var(--bino)}#hl.t{--c:var(--scope)}#hl.done{--c:var(--good)}
 @keyframes pulse{50%{opacity:.55}}
 #shade{fill:#000;fill-opacity:.8}
 .pin{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font:600 11px/1 var(--mono);pointer-events:none;border:1.5px solid #000;background:#fff;color:#000}
@@ -76,6 +76,8 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
 .btn.ghost{background:none;color:var(--ink);border-color:var(--line);font-weight:500;flex:0 0 auto}
 .nav{background:none;border:1px solid var(--line);border-radius:6px;width:48px;font-size:20px;line-height:1;color:var(--ink);flex:none}
 .toast{margin-top:8px;font-size:13px;color:var(--good)}
+.logged{margin-top:10px;font-size:13px;color:var(--good)}
+.btn.done{background:none;color:var(--good);border-color:var(--good)}
 .link{background:none;border:0;padding:0;color:var(--ink-2);font-size:12.5px;text-decoration:underline;text-underline-offset:3px}
 /* menu */
 #menu{position:absolute;right:max(12px,calc(50% - 368px));bottom:calc(100% + 10px);width:290px;max-width:calc(100% - 24px);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:0 12px 40px #000c;z-index:5}
@@ -297,10 +299,8 @@ function bestFor(f){ // when low sun throws the longest useful shadows across th
 const TIERNAME={n:'Naked eye',b:'Binoculars or telescope',t:'Telescope'};
 let queue=[], pos=0, lastLogged=null, toast='';
 function buildQueue(){
-  const q=[]; const figs=Object.keys(S.log).filter(id=>byId[id]&&byId[id].kind==='figure').length;
+  const q=[];
   for(const f of DATA.features){
-    if(S.log[f.id]) continue;
-    if(f.kind==='figure'&&figs>=4) continue;
     const v=visInfo(f), tier='nbt'.indexOf(f.tier); let rank;
     if(!v.now) rank=20;
     else if(f.kind==='phase') rank=0;
@@ -314,6 +314,7 @@ function buildQueue(){
 }
 const current=()=>queue.length?queue[pos]:null;
 function step(d){ if(!queue.length) return; pos=(pos+d+queue.length)%queue.length; lastLogged=null; toast=''; paintCard(); fly(current().f); }
+function nextUnlogged(){ for(let k=1;k<=queue.length;k++){ const i=(pos+k)%queue.length; if(!S.log[queue[i].f.id]) return i; } return pos; }
 
 /* ---------- map ---------- */
 const stage=$('stage'), pz=$('pz'), orient=$('orient'), hl=$('hl'), card=$('card');
@@ -333,7 +334,7 @@ function apply(anim){
   orient.style.transform=(rot?'rotate(180deg) ':'')+(mirror?'scaleX(-1)':'');
   const u=1000/(W*z), c=current(), f=c&&c.f;
   if(f&&f.shape&&showHl){
-    hl.hidden=false; hl.setAttribute('d',f.shape.d); hl.setAttribute('class',f.shape.t+' '+f.tier);
+    hl.hidden=false; hl.setAttribute('d',f.shape.d); hl.setAttribute('class',f.shape.t+' '+f.tier+(S.log[f.id]?' done':''));
     hl.style.strokeWidth = f.shape.t==='l' ? Math.max(f.shape.w,6*u) : 1.8*u;
   } else hl.hidden=true;
   const ps=[...pz.querySelectorAll('.site')].map(p=>{ let x=+p.dataset.x,y=+p.dataset.y; if(mirror)x=1-x; if(rot){x=1-x;y=1-y;} p.style.left=(x*100)+'%'; p.style.top=(y*100)+'%'; p.style.transform='scale('+(1/z)+')'; p.hidden=!showHl; return {p,sx:x*W*z,sy:y*W*z}; }).sort((a,b)=>a.sy-b.sy);
@@ -394,7 +395,7 @@ function tapAt(px,py){
   const i=queue.findIndex(q=>q.f.id===best.id);
   hold=true;
   if(i>=0){ pos=i; lastLogged=null; toast=''; paintCard(); apply(); card.scrollTop=0; }
-  else { lastLogged=null; toast=best.name+' is already in your log.'; paintCard(); const c=card.querySelector('.toast'); if(!c) card.append(el('div',{class:'toast',text:toast})); }
+
 }
 /* swipe on the card too */
 let cx0=null, cy0=0;
@@ -442,6 +443,7 @@ function paintCard(){
     return;
   }
   const f=cur.f, v=cur.v;
+  const le=S.log[f.id];
   card.append(el('div',{class:'eyebrow'},el('span',{text:TIERNAME[f.tier]+' · '+(pos+1)+' of '+queue.length}),menuBtn));
   card.append(el('h2',{class:'name'+(f.kind==='mare'?' mare':''),text:f.name}));
   if(f.en) card.append(el('p',{class:'en',text:f.en}));
@@ -454,28 +456,31 @@ function paintCard(){
   if(f.fact) card.append(el('p',{class:'fact'},el('span',{text:'Worth sharing'}),f.fact));
   card.append(el('div',{class:'actions'},
     el('button',{class:'nav','aria-label':'Previous target',text:'‹',onclick:()=>step(-1)}),
-    el('button',{class:'btn',text:'Found it',onclick:()=>found(f)}),
+    le?el('button',{class:'btn done',text:'✓ Found · edit',onclick:()=>found(f)}):el('button',{class:'btn',text:'Found it',onclick:()=>found(f)}),
     el('button',{class:'nav','aria-label':'Next target',text:'›',onclick:()=>step(1)})));
+  if(le) card.append(el('div',{class:'logged'},'Logged '+le.date+' at '+le.time+' · seeing '+le.seeing+' · transp. '+le.transp+' · '+({0:'eyes only',1:'binoculars',3:'telescope'}[le.inst]||'inst. '+le.inst)+'. ',el('button',{class:'link',text:'Remove',onclick:()=>{delete S.log[f.id];lastLogged=null;toast='';save();paintCard();apply();}})));
   if(lastLogged) card.append(el('div',{class:'toast'},toast+' ',el('button',{class:'link',text:'Undo',onclick:undo})));
 }
 let dlgFor=null;
 function found(f){
   const [d,t]=nowParts(); dlgFor=f;
   $('dlgName').textContent=f.name+(f.en?' · '+f.en:'');
-  $('dDate').value=d; $('dTime').value=t; $('dSee').value=S.prefs.seeing; $('dTr').value=S.prefs.transp; $('dIn').value=f.tier==='n'?'0':(S.prefs.inst==='1'?'1':'3');
+  const ex=S.log[f.id]; $('dlgT').textContent=ex?'Edit this observation':'Log this observation'; $('dlgF').querySelector('.btn').textContent=ex?'Save changes':'Save to my log';
+  $('dDate').value=ex?ex.date:d; $('dTime').value=ex?ex.time:t; $('dSee').value=ex?ex.seeing:S.prefs.seeing; $('dTr').value=ex?ex.transp:S.prefs.transp; $('dIn').value=ex?ex.inst:(f.tier==='n'?'0':(S.prefs.inst==='1'?'1':'3'));
   $('menu').hidden=true; $('dlg').hidden=false; $('dSee').focus();
 }
 function closeDlg(){ $('dlg').hidden=true; dlgFor=null; }
 $('dCancel').onclick=closeDlg;
 $('dlg').addEventListener('click',e=>{ if(e.target===$('dlg')) closeDlg(); });
 $('dlgF').addEventListener('submit',e=>{
-  e.preventDefault(); const f=dlgFor; if(!f) return;
+  e.preventDefault(); const f=dlgFor; if(!f) return; const dlgWas=!!S.log[f.id];
   S.log[f.id]={date:$('dDate').value,time:$('dTime').value,seeing:$('dSee').value,transp:$('dTr').value,inst:$('dIn').value,notes:''};
   S.prefs.seeing=$('dSee').value; S.prefs.transp=$('dTr').value; if($('dIn').value!=='0') S.prefs.inst=$('dIn').value;
-  save(); lastLogged=f.id; toast='Logged '+f.name+'.'; closeDlg();
-  buildQueue(); paintCard(); refly();
+  const wasNew=!dlgWas; save(); closeDlg();
+  if(wasNew){ lastLogged=f.id; toast='Logged '+f.name+'. Swipe back to see it.'; pos=nextUnlogged(); } else { lastLogged=null; toast=''; }
+  paintCard(); refly();
 });
-function undo(){ if(!lastLogged) return; const id=lastLogged; delete S.log[id]; lastLogged=null; toast=''; save(); buildQueue(); const i=queue.findIndex(q=>q.f.id===id); if(i>=0) pos=i; paintCard(); refly(); }
+function undo(){ if(!lastLogged) return; const id=lastLogged; delete S.log[id]; lastLogged=null; toast=''; save(); const i=queue.findIndex(q=>q.f.id===id); if(i>=0) pos=i; paintCard(); refly(); }
 document.addEventListener('click',e=>{ if(!$('menu').hidden&&!e.target.closest('#menu')) $('menu').hidden=true; });
 
 /* ---------- log sheet ---------- */
@@ -485,7 +490,7 @@ function paintSheet(){
   add('Naked eye',c.n,18); add('Binoculars',c.b,46); add('Telescope',c.t,36); add('All',c.n+c.b+c.t,100);
   const B=$('entries'); B.textContent=''; const rows=F.filter(f=>S.log[f.id]);
   if(!rows.length) B.append(el('div',{class:'empty',text:'Nothing logged yet. Go back to the moon and tap Found it when you spot the target.'}));
-  for(const f of rows){const e=S.log[f.id]; B.append(el('div',{class:'entry'},el('div',{class:'en',text:f.name}),el('div',{class:'em',text:e.date+' '+e.time+' · seeing '+e.seeing+' · transp. '+e.transp+' · inst. '+e.inst}),el('button',{class:'link',text:'Remove',onclick:()=>{delete S.log[f.id];save();buildQueue();paintSheet();paintCard();}})));}
+  for(const f of rows){const e=S.log[f.id]; B.append(el('div',{class:'entry'},el('div',{class:'en',text:f.name}),el('div',{class:'em',text:e.date+' '+e.time+' · seeing '+e.seeing+' · transp. '+e.transp+' · inst. '+e.inst}),el('button',{class:'link',text:'Remove',onclick:()=>{delete S.log[f.id];save();paintSheet();paintCard();}})));}
   $('pLat').value=S.prefs.lat; $('pLon').value=S.prefs.lon;
 }
 $('bLog').onclick=()=>{$('menu').hidden=true;$('sheet').hidden=false;paintSheet()};
