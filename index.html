@@ -67,6 +67,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
 .size{margin:6px 0 0;font:400 12.5px/1.35 var(--mono);color:var(--ink-2)}
 .vis{margin:8px 0 0;font:500 13px/1.35 var(--mono);color:var(--ink-2)}
 .vis.now{color:var(--good)}
+.bestline{margin:4px 0 0;font:500 13px/1.35 var(--mono);color:var(--accent)}
 .vis b{font-weight:500;color:var(--accent)}
 .tip{margin:8px 0 0;max-width:66ch}
 .wiki{color:var(--accent);text-underline-offset:3px;font-size:13.5px;white-space:nowrap}
@@ -277,9 +278,19 @@ function visInfo(f){ // {now, best, start, text, where}
     if(now){const e=crossing(hi,when,1); return {now,start:when,text:'Likely visible '+NT()+', until '+fmtDay(e)};}
     const a=crossing(lo,when,1), b=crossing(hi,a,1); return {now,start:a,text:'Likely visible '+fmtDay(a)+' to '+fmtDay(b)};
   }
-  const h=sunAlt(f), now=h>1, E1=norm(91-f.lon), E2=norm(269-f.lon);
-  if(now){const e=crossing(E2,when,1); return {now,best:h<14&&!(f.kind==='mare'&&f.tier==='n'),start:when,text:'Likely visible '+NT()+', until '+fmtDay(e)};}
-  const a=crossing(E1,when,1), b=crossing(E2,a,1); return {now,start:a,text:'Likely visible '+fmtDay(a)+' to '+fmtDay(b)};
+  const h=sunAlt(f), now=h>1, E1=norm(91-f.lon), E2=norm(269-f.lon), bestTxt=bestFor(f);
+  if(now){const e=crossing(E2,when,1); return {now,best:h<14&&!(f.kind==='mare'&&f.tier==='n'),start:when,bestTxt,text:'Likely visible '+NT()+', until '+fmtDay(e)};}
+  const a=crossing(E1,when,1), b=crossing(E2,a,1); return {now,start:a,bestTxt,text:'Likely visible '+fmtDay(a)+' to '+fmtDay(b)};
+}
+
+function bestFor(f){ // when low sun throws the longest useful shadows across this feature
+  if(f.kind==='mare'&&f.tier==='n') return 'Best seen: any night it is sunlit. The seas show by colour, not shadow.';
+  if(f.kind==='rays'||f.kind==='swirl'){ const fm=crossing(180,when,1); return 'Best seen: around full moon, when bright markings stand out. Next: '+fmtDay(fm)+'.'; }
+  const dE=Math.min(7/Math.max(Math.cos(f.lat*R),0.2),14);
+  const am=crossing(norm(90-f.lon+dE),when,1), pm=crossing(norm(270-f.lon-dE),when,1);
+  const part=(t,kind)=>fmtDay(t)+' ('+kind+', '+(elong(t)<180?'evening sky':'after midnight')+')';
+  const list=[[am,'sunrise shadows'],[pm,'sunset shadows']].filter(x=>x[0]!=null).sort((a,b)=>a[0]-b[0]).map(x=>part(x[0],x[1]));
+  return list.length?'Best seen: '+list.join(' or ')+'.':'';
 }
 
 /* ---------- the queue: everything not yet logged, visible ones first ---------- */
@@ -413,6 +424,7 @@ function paintCard(){
   if(f.size){ const long=/rille|scarp|valley/.test(f.kind)||/^Montes/.test(f.name); const mi=Math.round(f.size*0.6214/(f.size>=100?5:1))*(f.size>=100?5:1);
     card.append(el('p',{class:'size',text:f.size.toLocaleString()+' km ('+mi.toLocaleString()+' mi) '+(long?'long':'across')+(f.lat!=null?' · '+Math.abs(f.lat).toFixed(1)+'° '+(f.lat>=0?'N':'S')+', '+Math.abs(f.lon).toFixed(1)+'° '+(f.lon>=0?'E':'W'):'')})); }
   card.append(el('p',{class:'vis'+(v.now?' now':'')},v.text+'.',v.best?el('b',{text:' Low sun '+NT()+': best view.'}):null,v.where?' '+v.where:null));
+  if(v.bestTxt) card.append(el('p',{class:'bestline',text:v.bestTxt}));
   card.append(el('p',{class:'tip'},f.tip+' ',f.wiki?el('a',{class:'wiki',href:f.wiki,target:'_blank',rel:'noopener',text:'Wikipedia'}):null));
   if(f.sites){ const KN={crew:'crewed landing',robot:'robotic lander',impact:'impact'}; card.append(el('div',{class:'sitehead',text:'Landing sites on the map'}),el('ul',{class:'sites'},...f.sites.map((o,i)=>el('li',null,el('span',{class:'pin '+o.k,text:String(i+1)}),el('span',null,o.n+', '+o.y+' ',el('small',{text:'· '+KN[o.k]+' · '+o.t})))))); }
   if(f.fact) card.append(el('p',{class:'fact'},el('span',{text:'Worth sharing'}),f.fact));
