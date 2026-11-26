@@ -133,7 +133,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
     <img id="moon" src="moon.jpg" alt="Full-disc photograph of the moon, north at the top">
     <svg id="ov" viewBox="0 0 1000 1000" aria-hidden="true">
       <path id="shade" d=""></path>
-      <path id="hl" d="" hidden></path>
+      <path id="probe" d="" fill="#000" stroke="#000" opacity="0" pointer-events="none"></path><path id="hl" d="" hidden></path>
     </svg>
   </div></div>
 </div>
@@ -317,7 +317,7 @@ function step(d){ if(!queue.length) return; pos=(pos+d+queue.length)%queue.lengt
 
 /* ---------- map ---------- */
 const stage=$('stage'), pz=$('pz'), orient=$('orient'), hl=$('hl'), card=$('card');
-let W=1,Hs=1,z=1,tx=0,ty=0,mirror=S.prefs.mirror!==false,rot=false,showHl=true,manual=false;
+let W=1,Hs=1,z=1,tx=0,ty=0,mirror=S.prefs.mirror!==false,rot=false,showHl=true,manual=false,hold=false;
 const zmin=()=>Math.min(W,Hs)/W;
 function clamp(){
   z=Math.max(zmin(),Math.min(6,z)); const c=W*z;
@@ -339,24 +339,24 @@ function apply(anim){
   const ps=[...pz.querySelectorAll('.site')].map(p=>{ let x=+p.dataset.x,y=+p.dataset.y; if(mirror)x=1-x; if(rot){x=1-x;y=1-y;} p.style.left=(x*100)+'%'; p.style.top=(y*100)+'%'; p.style.transform='scale('+(1/z)+')'; p.hidden=!showHl; return {p,sx:x*W*z,sy:y*W*z}; }).sort((a,b)=>a.sy-b.sy);
   const done=[]; for(const o of ps){ let ly=o.sy; for(const d of done) if(Math.abs(d.sx-o.sx)<34&&ly<d.ly+19&&ly>d.ly-19) ly=d.ly+19; o.ly=ly; done.push(o); o.p.lastChild.style.top=(ly-o.sy-9)+'px'; }
 }
-function fit(anim){ manual=false; z=zmin(); tx=0; ty=0; apply(anim); }
+function fit(anim){ manual=false; hold=false; z=zmin(); tx=0; ty=0; apply(anim); }
 function fly(f){
   if(!f||f.nx==null){ fit(true); return; }
-  manual=false;
+  manual=false; hold=false;
   z = Math.max(zmin(),Math.min(3.4,3900/W,2.8*Math.min(W,Hs)/W,0.17*Math.min(W,Hs)/(Math.max(f.nr,0.012)*W)));
   const [x,y]=local(f); tx=W/2-x*W*z; ty=Hs/2-y*W*z; apply(true);
 }
 function zoomAt(px,py,nz){ manual=true; nz=Math.max(zmin(),Math.min(6,nz)); tx=px-(px-tx)*(nz/z); ty=py-(py-ty)*(nz/z); z=nz; apply(); }
 let sized=false;
-new ResizeObserver(()=>{ const r=stage.getBoundingClientRect(); W=r.width; Hs=r.height; if(!sized){sized=true; fit(false); const c=current(); if(c) setTimeout(()=>fly(c.f),350);} else { const c=current(); manual?apply():(c?fly(c.f):fit()); } }).observe(stage);
+new ResizeObserver(()=>{ const r=stage.getBoundingClientRect(); W=r.width; Hs=r.height; if(!sized){sized=true; fit(false); const c=current(); if(c) setTimeout(()=>fly(c.f),350);} else { const c=current(); (manual||hold)?apply():(c?fly(c.f):fit()); } }).observe(stage);
 function paintShade(){
   const d=DATA.disc, cx=d.cx*1000, cy=d.cy*1000, r=d.r*1000, waxing=E<180, k=Math.cos(E*R), xt=waxing?k:-k;
   $('shade').setAttribute('d',`M${cx},${cy-r-4} A${r+4},${r+4} 0 0 ${waxing?0:1} ${cx},${cy+r+4} A${Math.abs((r+4)*k).toFixed(1)},${r+4} 0 0 ${xt>0?0:1} ${cx},${cy-r-4} Z`);
 }
 /* One finger on the moon swipes to the next target. After you pinch or scroll to zoom, one finger pans instead. */
-const ptrs=new Map(); let pinch=0, sx=0, sy=0, swiping=false;
+const ptrs=new Map(); let pinch=0, sx=0, sy=0, swiping=false, moved0=0;
 stage.addEventListener('pointerdown',e=>{ $('menu').hidden=true; stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(ptrs.size===1){sx=e.clientX;sy=e.clientY;swiping=!manual;} else {swiping=false; const [a,b]=[...ptrs.values()]; pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);} });
+  if(ptrs.size===1){sx=e.clientX;sy=e.clientY;swiping=!manual;moved0=0;} else {swiping=false; const [a,b]=[...ptrs.values()]; pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);} });
 stage.addEventListener('pointermove',e=>{
   const p=ptrs.get(e.pointerId); if(!p) return;
   const dx=e.clientX-p[0], dy=e.clientY-p[1]; ptrs.set(e.pointerId,[e.clientX,e.clientY]);
@@ -367,11 +367,35 @@ stage.addEventListener('pointermove',e=>{
 function up(e){
   if(!ptrs.has(e.pointerId)) return;
   const one=ptrs.size===1; ptrs.delete(e.pointerId); pinch=0;
-  if(one&&swiping&&e.type==='pointerup'){ const dx=e.clientX-sx, dy=e.clientY-sy; if(Math.abs(dx)>45&&Math.abs(dx)>1.4*Math.abs(dy)) step(dx<0?1:-1); }
+  if(one&&e.type==='pointerup'){ const dx=e.clientX-sx, dy=e.clientY-sy;
+    if(Math.hypot(dx,dy)<8){ const r=stage.getBoundingClientRect(); tapAt(e.clientX-r.left,e.clientY-r.top); }
+    else if(swiping&&Math.abs(dx)>45&&Math.abs(dx)>1.4*Math.abs(dy)) step(dx<0?1:-1); }
   swiping=false;
 }
 stage.addEventListener('pointerup',up); stage.addEventListener('pointercancel',up);
 stage.addEventListener('wheel',e=>{e.preventDefault(); const r=stage.getBoundingClientRect(); zoomAt(e.clientX-r.left,e.clientY-r.top,z*Math.exp(-e.deltaY*0.0016));},{passive:false});
+/* tap a feature on the moon to bring up its card */
+function tapAt(px,py){
+  let x=(px-tx)/(W*z), y=(py-ty)/(W*z); if(mirror)x=1-x; if(rot){x=1-x;y=1-y;}
+  if(x<0||x>1||y<0||y>1) return;
+  const probe=$('probe'), pt=$('ov').createSVGPoint(); pt.x=x*1000; pt.y=y*1000;
+  let best=null;
+  for(const f of DATA.features){
+    if(f.nx==null||!f.shape) continue;
+    let inside=false;
+    try{ probe.setAttribute('d',f.shape.d);
+      if(f.shape.t==='l'){ probe.style.strokeWidth=Math.max(f.shape.w*2.5,22); inside=probe.isPointInStroke(pt); }
+      else { probe.style.strokeWidth=0; inside=probe.isPointInFill(pt); } }
+    catch(e){ inside=Math.hypot(f.nx-x,f.ny-y)<=Math.max(f.nr,0.012); }
+    if(!inside&&Math.hypot(f.nx-x,f.ny-y)<=0.012/Math.max(1,z/2)) inside=true;   // small targets get a little slack
+    if(inside&&(!best||f.nr<best.nr)) best=f;
+  }
+  if(!best) return;
+  const i=queue.findIndex(q=>q.f.id===best.id);
+  hold=true;
+  if(i>=0){ pos=i; lastLogged=null; toast=''; paintCard(); apply(); card.scrollTop=0; }
+  else { lastLogged=null; toast=best.name+' is already in your log.'; paintCard(); const c=card.querySelector('.toast'); if(!c) card.append(el('div',{class:'toast',text:toast})); }
+}
 /* swipe on the card too */
 let cx0=null, cy0=0;
 $('panel').addEventListener('touchstart',e=>{ if(e.touches.length===1&&!e.target.closest('#menu')){cx0=e.touches[0].clientX;cy0=e.touches[0].clientY;} else cx0=null; },{passive:true});
