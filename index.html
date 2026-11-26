@@ -146,7 +146,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
     <section>
       <h3>Map</h3>
       <div class="mrow">
-        <button class="tog" id="bMirror" aria-pressed="false" title="Flip left to right, as a telescope with a star diagonal shows it">Mirror</button>
+        <button class="tog" id="bMirror" aria-pressed="true" title="Flip left to right, as a telescope with a star diagonal shows it. Turn off for the naked-eye view.">Mirror (telescope view)</button>
         <button class="tog" id="bRot" aria-pressed="false" title="Turn the map upside down">Rotate</button>
         <button class="tog" id="bHl" aria-pressed="true" title="Show or hide the coloured tint on the target">Highlight</button>
         <button class="tog" id="bFit" title="Show the whole moon">Whole moon</button>
@@ -224,7 +224,7 @@ function save(){
     docRef=ref;
     if(snap.exists){
       const r=snap.data();
-      if((r.updated||0)>(S.updated||0)&&r.log){S=Object.assign(S,JSON.parse(JSON.stringify(r)));S.prefs=Object.assign({},PREFS,S.prefs||{});try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){} rebuild();}
+      if((r.updated||0)>(S.updated||0)&&r.log){S=Object.assign(S,JSON.parse(JSON.stringify(r)));S.prefs=Object.assign({},PREFS,S.prefs||{});try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){} mirror=S.prefs.mirror!==false; rebuild();}
       else if((S.updated||0)>(r.updated||0)) save();
     } else if(Object.keys(S.log).length) save();
     setSync('Saved to your Claude account, so it follows you between devices.');
@@ -306,7 +306,7 @@ function step(d){ if(!queue.length) return; pos=(pos+d+queue.length)%queue.lengt
 
 /* ---------- map ---------- */
 const stage=$('stage'), pz=$('pz'), orient=$('orient'), hl=$('hl'), card=$('card');
-let W=1,Hs=1,z=1,tx=0,ty=0,mirror=false,rot=false,showHl=true,manual=false;
+let W=1,Hs=1,z=1,tx=0,ty=0,mirror=S.prefs.mirror!==false,rot=false,showHl=true,manual=false;
 const zmin=()=>Math.min(W,Hs)/W;
 function clamp(){
   z=Math.max(zmin(),Math.min(6,z)); const c=W*z;
@@ -370,7 +370,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('dlg').hidden){
 /* ---------- menu ---------- */
 const press=(b,v)=>b.setAttribute('aria-pressed',v?'true':'false');
 const refly=()=>{const c=current();c?fly(c.f):fit(true)};
-$('bMirror').onclick=()=>{mirror=!mirror;press($('bMirror'),mirror);refly()};
+$('bMirror').onclick=()=>{mirror=!mirror;S.prefs.mirror=mirror;save();press($('bMirror'),mirror);refly()};
 $('bRot').onclick=()=>{rot=!rot;press($('bRot'),rot);refly()};
 $('bHl').onclick=()=>{showHl=!showHl;press($('bHl'),showHl);apply()};
 $('bFit').onclick=()=>{fit(true);$('menu').hidden=true};
@@ -382,7 +382,7 @@ function paintMenu(){
   const lit=Math.round((1-Math.cos(E*R))/2*100);
   $('skyText').textContent=(live?'Tonight':fmtDay(when))+': '+phaseName(E).toLowerCase()+', '+lit+'% lit, day '+(E/360*SYN).toFixed(1)+'.';
   const d=new Date(when); $('when').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-  press($('bNow'),live);
+  press($('bNow'),live); press($('bMirror'),mirror);
 }
 function counts(){
   const c={n:0,b:0,t:0}; let figs=0;
