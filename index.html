@@ -89,6 +89,16 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
 .cgrid label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--ink-3);min-width:0}
 .cgrid select{width:100%}
 .msky{font-size:12.5px;color:var(--ink-2);margin-top:6px}
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:16px;z-index:20}
+#dlg[hidden]{display:none}
+.dlg-in{width:100%;max-width:400px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 16px;max-height:100%;overflow:auto}
+.dlg-in h2{margin:0;font:700 21px/1.2 var(--display)}
+.dlg-sub{margin:2px 0 0;font:italic 500 17px/1.25 var(--display);color:var(--ink-2)}
+.dgrid{margin-top:14px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.dgrid label{display:flex;flex-direction:column;gap:4px;font:500 10.5px/1.2 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);min-width:0}
+.dgrid input,.dgrid select{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:8px;font:400 14px var(--mono);width:100%;min-width:0;color-scheme:dark;text-transform:none;letter-spacing:0}
+.d2{grid-column:span 2}.d4{grid-column:span 4}
+.dlg-note{margin:12px 0 0;font-size:12.5px;color:var(--ink-3)}
 /* log sheet */
 #sheet{position:fixed;inset:0;background:var(--panel);overflow:auto;padding:18px 20px 40px;z-index:10}
 #sheet[hidden]{display:none}
@@ -143,18 +153,25 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
         <button class="tog" id="bNight" aria-pressed="false" title="Turn the screen red to protect night vision">Red light</button>
       </div>
     </section>
-    <section>
-      <h3>Found it logs as</h3>
-      <div class="cgrid">
-        <label>Seeing<select id="cSee"><option value="E">E</option><option value="VG">VG</option><option value="G">G</option><option value="F">F</option><option value="P">P</option></select></label>
-        <label>Transp.<select id="cTr"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
-        <label>With<select id="cIn"><option value="3">scope</option><option value="1">binos</option></select></label>
-      </div>
-    </section>
     <section><div class="mrow"><button class="tog" id="bLog">Open my log</button></div></section>
     <section><div class="msky" style="margin:0">Checklist from the <a class="wiki" style="white-space:normal" href="https://www.astroleague.org/lunar-observing-program/" target="_blank" rel="noopener">Astronomical League Lunar Observing Program</a>. This is an unofficial helper.</div></section>
   </div>
   <div id="card" aria-live="polite"></div>
+</div>
+<div id="dlg" hidden role="dialog" aria-modal="true" aria-labelledby="dlgT">
+  <form id="dlgF" class="dlg-in">
+    <h2 id="dlgT">Log this observation</h2>
+    <p class="dlg-sub" id="dlgName"></p>
+    <div class="dgrid">
+      <label class="d2">Date<input type="date" id="dDate" required></label>
+      <label class="d2">Time<input type="time" id="dTime" required></label>
+      <label class="d2">Seeing<select id="dSee"><option value="E">E · excellent</option><option value="VG">VG · very good</option><option value="G">G · good</option><option value="F">F · fair</option><option value="P">P · poor</option></select></label>
+      <label class="d2">Transparency<select id="dTr"><option value="1">1 · worst</option><option>2</option><option>3</option><option>4</option><option>5</option><option value="6">6 · best</option></select></label>
+      <label class="d4">Instrument<select id="dIn"><option value="0">0 · eyes only</option><option value="1">1 · binoculars</option><option value="3">3 · telescope (8-inch)</option></select></label>
+    </div>
+    <p class="dlg-note">These are the columns on the Astronomical League form. Seeing is how steady the image is. Transparency is the faintest star you can see, 1 to 6.</p>
+    <div class="actions"><button type="submit" class="btn">Save to my log</button><button type="button" class="btn ghost" id="dCancel">Cancel</button></div>
+  </form>
 </div>
 <div id="sheet" hidden>
   <div class="sheet-in">
@@ -348,7 +365,7 @@ stage.addEventListener('wheel',e=>{e.preventDefault(); const r=stage.getBounding
 let cx0=null, cy0=0;
 $('panel').addEventListener('touchstart',e=>{ if(e.touches.length===1&&!e.target.closest('#menu')){cx0=e.touches[0].clientX;cy0=e.touches[0].clientY;} else cx0=null; },{passive:true});
 $('panel').addEventListener('touchend',e=>{ if(cx0==null) return; const t=e.changedTouches[0], dx=t.clientX-cx0, dy=t.clientY-cy0; cx0=null; if(Math.abs(dx)>50&&Math.abs(dx)>1.4*Math.abs(dy)) step(dx<0?1:-1); },{passive:true});
-document.addEventListener('keydown',e=>{ if(e.target.closest('input,select,textarea')||!$('sheet').hidden) return; if(e.key==='ArrowRight') step(1); else if(e.key==='ArrowLeft') step(-1); else if(e.key==='Escape') $('menu').hidden=true; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('dlg').hidden){closeDlg();return} if(e.target.closest('input,select,textarea')||!$('sheet').hidden||!$('dlg').hidden) return; if(e.key==='ArrowRight') step(1); else if(e.key==='ArrowLeft') step(-1); else if(e.key==='Escape') $('menu').hidden=true; });
 
 /* ---------- menu ---------- */
 const press=(b,v)=>b.setAttribute('aria-pressed',v?'true':'false');
@@ -360,13 +377,12 @@ $('bFit').onclick=()=>{fit(true);$('menu').hidden=true};
 $('bNight').onclick=()=>{press($('bNight'),document.documentElement.classList.toggle('night'))};
 $('when').onchange=e=>{ const p=e.target.value.split('-').map(Number); if(p.length!==3||!p[0]) return; const n=new Date(); live=(p[0]===n.getFullYear()&&p[1]===n.getMonth()+1&&p[2]===n.getDate()); when=live?Date.now():new Date(p[0],p[1]-1,p[2],21,0).getTime(); pos=0; rebuild(); };
 $('bNow').onclick=()=>{when=Date.now();live=true;pos=0;rebuild()};
-for(const [id,k] of [['cSee','seeing'],['cTr','transp'],['cIn','inst']]) $(id).onchange=e=>{S.prefs[k]=e.target.value;save()};
 function paintMenu(){
   E=elong(when);
   const lit=Math.round((1-Math.cos(E*R))/2*100);
   $('skyText').textContent=(live?'Tonight':fmtDay(when))+': '+phaseName(E).toLowerCase()+', '+lit+'% lit, day '+(E/360*SYN).toFixed(1)+'.';
   const d=new Date(when); $('when').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-  press($('bNow'),live); $('cSee').value=S.prefs.seeing; $('cTr').value=S.prefs.transp; $('cIn').value=S.prefs.inst==='1'?'1':'3';
+  press($('bNow'),live);
 }
 function counts(){
   const c={n:0,b:0,t:0}; let figs=0;
@@ -406,12 +422,23 @@ function paintCard(){
     el('button',{class:'nav','aria-label':'Next target',text:'›',onclick:()=>step(1)})));
   if(lastLogged) card.append(el('div',{class:'toast'},toast+' ',el('button',{class:'link',text:'Undo',onclick:undo})));
 }
+let dlgFor=null;
 function found(f){
-  const [d,t]=nowParts();
-  S.log[f.id]={date:d,time:t,seeing:S.prefs.seeing,transp:S.prefs.transp,inst:f.tier==='n'?'0':S.prefs.inst,notes:''};
-  save(); lastLogged=f.id; toast='Logged '+f.name+'.';
-  buildQueue(); paintCard(); refly();
+  const [d,t]=nowParts(); dlgFor=f;
+  $('dlgName').textContent=f.name+(f.en?' · '+f.en:'');
+  $('dDate').value=d; $('dTime').value=t; $('dSee').value=S.prefs.seeing; $('dTr').value=S.prefs.transp; $('dIn').value=f.tier==='n'?'0':(S.prefs.inst==='1'?'1':'3');
+  $('menu').hidden=true; $('dlg').hidden=false; $('dSee').focus();
 }
+function closeDlg(){ $('dlg').hidden=true; dlgFor=null; }
+$('dCancel').onclick=closeDlg;
+$('dlg').addEventListener('click',e=>{ if(e.target===$('dlg')) closeDlg(); });
+$('dlgF').addEventListener('submit',e=>{
+  e.preventDefault(); const f=dlgFor; if(!f) return;
+  S.log[f.id]={date:$('dDate').value,time:$('dTime').value,seeing:$('dSee').value,transp:$('dTr').value,inst:$('dIn').value,notes:''};
+  S.prefs.seeing=$('dSee').value; S.prefs.transp=$('dTr').value; if($('dIn').value!=='0') S.prefs.inst=$('dIn').value;
+  save(); lastLogged=f.id; toast='Logged '+f.name+'.'; closeDlg();
+  buildQueue(); paintCard(); refly();
+});
 function undo(){ if(!lastLogged) return; const id=lastLogged; delete S.log[id]; lastLogged=null; toast=''; save(); buildQueue(); const i=queue.findIndex(q=>q.f.id===id); if(i>=0) pos=i; paintCard(); refly(); }
 document.addEventListener('click',e=>{ if(!$('menu').hidden&&!e.target.closest('#menu')) $('menu').hidden=true; });
 
