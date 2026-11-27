@@ -2,13 +2,9 @@ name: Fetch moon phase frames
 
 # Downloads NASA's moon phase video from Wikimedia Commons, pulls out the frames
 # listed in tools/moon-frames/frames.csv, and saves them to the nasa-raw branch.
+# Run it by hand from the Actions tab. The frames it fetched are already processed into nasa/.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'tools/moon-frames/**'
-      - '.github/workflows/moon-frames.yml'
 
 permissions:
   contents: write

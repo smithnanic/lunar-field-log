@@ -153,13 +153,14 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
       <div class="mrow">
         <button class="tog" id="bMirror" aria-pressed="true" title="Flip left to right, as a telescope with a star diagonal shows it. Turn off for the naked-eye view.">Mirror (telescope view)</button>
         <button class="tog" id="bRot" aria-pressed="false" title="Turn the map upside down">Rotate</button>
+        <button class="tog" id="bPhase" aria-pressed="false" title="Swap your photo for a NASA render lit as the moon is on the chosen night, with real shadows">Phase view (NASA)</button>
         <button class="tog" id="bHl" aria-pressed="true" title="Show or hide the coloured tint on the target">Highlight</button>
         <button class="tog" id="bFit" title="Show the whole moon">Whole moon</button>
         <button class="tog" id="bNight" aria-pressed="false" title="Turn the screen red to protect night vision">Red light</button>
       </div>
     </section>
     <section><div class="mrow"><button class="tog" id="bLog">Open my log</button></div></section>
-    <section><div class="msky" style="margin:0">Checklist from the <a class="wiki" style="white-space:normal" href="https://www.astroleague.org/lunar-observing-program/" target="_blank" rel="noopener">Astronomical League Lunar Observing Program</a>. This is an unofficial helper.</div></section>
+    <section><div class="msky" style="margin:0">Checklist from the <a class="wiki" style="white-space:normal" href="https://www.astroleague.org/lunar-observing-program/" target="_blank" rel="noopener">Astronomical League Lunar Observing Program</a>. This is an unofficial helper. Phase view images: NASA's Scientific Visualization Studio.</div></section>
   </div>
   <div id="card" aria-live="polite"></div>
 </div>
@@ -376,9 +377,44 @@ function zoomAt(px,py,nz){ manual=true; nz=Math.max(zmin(),Math.min(6,nz)); tx=p
 let sized=false;
 new ResizeObserver(()=>{ const r=stage.getBoundingClientRect(); W=r.width; Hs=r.height; if(!sized){sized=true; fit(false); const c=current(); if(c) setTimeout(()=>fly(c.f),350);} else { const c=current(); (manual||hold)?apply():(c?fly(c.f):fit()); } }).observe(stage);
 function paintShade(){
+  if(viewKey!=='photo'){ $('shade').setAttribute('d',''); return; }
   const d=DATA.disc, cx=d.cx*1000, cy=d.cy*1000, r=d.r*1000, waxing=E<180, k=Math.cos(E*R), xt=waxing?k:-k;
   $('shade').setAttribute('d',`M${cx},${cy-r-4} A${r+4},${r+4} 0 0 ${waxing?0:1} ${cx},${cy+r+4} A${Math.abs((r+4)*k).toFixed(1)},${r+4} 0 0 ${xt>0?0:1} ${cx},${cy-r-4} Z`);
 }
+/* ---------- phase view: 30 NASA renders, one per 12 degrees of the lunar cycle ----------
+   Each render was turned north-up and resized so its disc sits exactly on my photo's disc.
+   What still differs is libration, the small tilt of the moon's face, so every marker,
+   outline and landing pin is moved from my photo's tilt to the render's tilt. */
+const NASA={ fit:[-0.09963,0.00963,0.00586,0.50552,0.49879,0.49213],          // my photo: three tilt angles (radians), then disc centre x, y and radius
+  frames:[[-0.826,6.476],[-2.184,6.574],[-3.529,6.32],[-4.732,5.739],[-5.762,4.887],[-6.641,3.726],[-7.23,2.387],[-7.485,0.945],[-7.374,-0.523],[-6.86,-2.006],[-5.961,-3.362],[-4.734,-4.521],[-3.186,-5.47],[-1.485,-6.115],[0.338,-6.459],[2.253,-6.472],[3.953,-6.156],[5.488,-5.513],[6.68,-4.607],[7.507,-3.45],[7.9,-2.099],[7.84,-0.686],[7.334,0.838],[6.465,2.279],[5.287,3.627],[3.884,4.808],[2.455,5.69],[0.97,6.3],[-0.409,6.565],[-1.753,6.487]] };  // each render: longitude and latitude of the point facing Earth, in degrees
+function rotM(a,b,c){ const ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b),cc=Math.cos(c),sc=Math.sin(c);
+  const X=[[1,0,0],[0,ca,-sa],[0,sa,ca]], Y=[[cb,0,sb],[0,1,0],[-sb,0,cb]], Z=[[cc,-sc,0],[sc,cc,0],[0,0,1]];
+  const mul=(A,B)=>A.map((r,i)=>B[0].map((_,j)=>r[0]*B[0][j]+r[1]*B[1][j]+r[2]*B[2][j])); return mul(Z,mul(X,Y)); }
+for(const f of DATA.features) f.o={nx:f.nx,ny:f.ny,d:f.shape?f.shape.d:null,sites:f.sites?f.sites.map(o=>[o.x,o.yy]):null};
+function setGeom(k){
+  if(k==null){ for(const f of DATA.features){ f.nx=f.o.nx; f.ny=f.o.ny; if(f.shape) f.shape.d=f.o.d; if(f.sites) f.sites.forEach((o,i)=>{o.x=f.o.sites[i][0];o.yy=f.o.sites[i][1]}); } return; }
+  const [a,b,c,cx,cy,r]=NASA.fit, Rp=rotM(a,b,c), fr=NASA.frames[k], Rf=rotM(fr[1]*R,-fr[0]*R,0);
+  const M=Rf.map(row=>[0,1,2].map(j=>row[0]*Rp[j][0]+row[1]*Rp[j][1]+row[2]*Rp[j][2])); // Rf times the inverse of Rp
+  const move=(x,y)=>{ let X=(x-cx)/r, Y=-(y-cy)/r, q=X*X+Y*Y, Zz=0; if(q>1){const n=Math.sqrt(q);X/=n;Y/=n;} else Zz=Math.sqrt(1-q);
+    let vx=M[0][0]*X+M[0][1]*Y+M[0][2]*Zz, vy=M[1][0]*X+M[1][1]*Y+M[1][2]*Zz, vz=M[2][0]*X+M[2][1]*Y+M[2][2]*Zz;
+    if(vz<0.02){ const n=Math.hypot(vx,vy)||1; vx/=n; vy/=n; }
+    return [cx+r*vx, cy-r*vy]; };
+  for(const f of DATA.features){
+    if(f.o.nx!=null){ const p=move(f.o.nx,f.o.ny); f.nx=p[0]; f.ny=p[1]; }
+    if(f.shape) f.shape.d=f.o.d.replace(/(-?[\d.]+),(-?[\d.]+)/g,(m,x,y)=>{const p=move(x/1000,y/1000); return (p[0]*1000).toFixed(1)+','+(p[1]*1000).toFixed(1);});
+    if(f.sites) f.sites.forEach((o,i)=>{const p=move(f.o.sites[i][0],f.o.sites[i][1]); o.x=p[0]; o.yy=p[1];});
+  }
+}
+let phaseOn=S.prefs.view==='nasa', viewKey='photo', viewWant='photo';
+function applyView(){
+  const k=phaseOn?(((Math.round((E-6)/12)%30)+30)%30):null, key=k==null?'photo':'n'+k;
+  viewWant=key; press($('bPhase'),phaseOn); if(key===viewKey) return;
+  const src=k==null?'moon.jpg':'nasa/'+pad(k)+'.jpg', im=new Image();
+  im.onload=()=>{ if(viewWant!==key) return; $('moon').src=src; viewKey=key; setGeom(k); paintShade(); paintCard(); if(sized) refly(); };
+  im.onerror=()=>{ if(viewWant!==key) return; phaseOn=false; applyView(); $('skyText').textContent+=' The phase image could not be loaded, so your photo is shown.'; };
+  im.src=src;
+}
+$('bPhase').onclick=()=>{ phaseOn=!phaseOn; S.prefs.view=phaseOn?'nasa':'photo'; save(); applyView(); };
 /* One finger on the moon swipes to the next target. After you pinch or scroll to zoom, one finger pans instead. */
 const ptrs=new Map(); let pinch=0, sx=0, sy=0, swiping=false, moved0=0;
 stage.addEventListener('pointerdown',e=>{ $('menu').hidden=true; stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
@@ -544,7 +580,7 @@ $('bCsv').onclick=async()=>{
 };
 
 
-function rebuild(start){ paintMenu(); paintShade(); buildQueue(); if(start){ const i=queue.findIndex(q=>!S.log[q.f.id]); pos=i<0?0:i; } lastLogged=null; toast=''; paintCard(); if(!$('sheet').hidden) paintSheet(); if(sized) refly(); }
+function rebuild(start){ paintMenu(); applyView(); paintShade(); buildQueue(); if(start){ const i=queue.findIndex(q=>!S.log[q.f.id]); pos=i<0?0:i; } lastLogged=null; toast=''; paintCard(); if(!$('sheet').hidden) paintSheet(); if(sized) refly(); }
 rebuild(true);
 </script>
 </body>
