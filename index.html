@@ -256,7 +256,29 @@ function crossing(target,from,dir){
   }
   return null;
 }
-let when=Date.now(), live=true, E=0;
+let when=Date.now(), live=true, E=0, moonless=false;
+/* ---------- is the moon up after dark tonight, from the observer's latitude and longitude? ---------- */
+function skyAlts(ms,lat,lon){ // low-precision sun and moon altitude in degrees
+  const n=ms/86400000+2440587.5-2451545, T=n/36525, s=x=>Math.sin(x*R), c=x=>Math.cos(x*R), eps=23.439-0.0000004*n;
+  const alt=(lam,bet)=>{
+    const ra=Math.atan2(s(lam)*c(eps)-Math.tan(bet*R)*s(eps),c(lam))/R, dec=Math.asin(s(bet)*c(eps)+c(bet)*s(eps)*s(lam))/R;
+    const ha=280.46061837+360.98564736629*n+lon-ra;
+    return Math.asin(s(lat)*s(dec)+c(lat)*c(dec)*c(ha))/R;
+  };
+  const g=357.528+0.9856003*n, sunLam=280.460+0.9856474*n+1.915*s(g)+0.020*s(2*g);
+  const mLam=218.32+481267.881*T+6.29*s(135.0+477198.87*T)-1.27*s(259.3-413335.36*T)+0.66*s(235.7+890534.22*T)+0.21*s(269.9+954397.74*T)-0.19*s(357.5+35999.05*T)-0.11*s(186.5+966404.03*T);
+  const mBet=5.13*s(93.3+483202.02*T)+0.28*s(228.2+960400.89*T)-0.28*s(318.3+6003.15*T)-0.17*s(217.6-407332.21*T);
+  return {sun:alt(sunLam,0), moon:alt(mLam,mBet)};
+}
+function degOf(v,dflt){ const m=String(v==null?'':v).match(/-?\d+(\.\d+)?/); if(!m) return dflt; let x=parseFloat(m[0]); if(/[SW]/i.test(String(v))) x=-Math.abs(x); return x; }
+function tonightMoon(){ // first moment from now until the coming dawn when it is dark and the moon is clear of the horizon; null if never
+  const lat=degOf(S.prefs.lat,33.65), lon=degOf(S.prefs.lon,-117.69), t0=Date.now(); let seenDark=false;
+  for(let i=0;i<=160;i++){ const t=t0+i*600000, a=skyAlts(t,lat,lon);
+    if(a.sun<-4){ seenDark=true; if(a.moon>8) return t; } else if(seenDark) break; }
+  return null;
+}
+function goLive(){ const t=tonightMoon(); live=true; moonless=t==null; when=t==null?Date.now():t; }
+goLive();
 const sunAlt=f=>Math.asin(Math.cos(f.lat*R)*Math.cos((f.lon-(180-E))*R))/R;
 const fmt=ms=>new Date(ms).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
 const fmtDay=ms=>new Date(ms).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
@@ -302,12 +324,13 @@ function buildQueue(){
   const q=[];
   for(const f of DATA.features){
     const v=visInfo(f), tier='nbt'.indexOf(f.tier); let rank;
-    if(!v.now) rank=20;
+    const up=v.now&&!moonless;
+    if(!up) rank=20;
     else if(f.kind==='phase') rank=0;
     else if(f.kind==='mare'&&f.tier==='n') rank=1;
     else if(f.kind==='figure') rank=1.5;
     else rank=(v.best?2:6)+tier;
-    q.push({f,v,rank,sub:v.now?(f.nx!=null?sunAlt(f):0):v.start});
+    q.push({f,v,rank,sub:up?(f.nx!=null?sunAlt(f):0):v.start});
   }
   q.sort((a,b)=>a.rank-b.rank||(a.sub||0)-(b.sub||0));
   queue=q; pos=Math.min(pos,Math.max(0,q.length-1));
@@ -411,13 +434,13 @@ $('bRot').onclick=()=>{rot=!rot;press($('bRot'),rot);refly()};
 $('bHl').onclick=()=>{showHl=!showHl;press($('bHl'),showHl);apply()};
 $('bFit').onclick=()=>{fit(true);$('menu').hidden=true};
 $('bNight').onclick=()=>{press($('bNight'),document.documentElement.classList.toggle('night'))};
-$('when').onchange=e=>{ const p=e.target.value.split('-').map(Number); if(p.length!==3||!p[0]) return; const n=new Date(); live=(p[0]===n.getFullYear()&&p[1]===n.getMonth()+1&&p[2]===n.getDate()); when=live?Date.now():new Date(p[0],p[1]-1,p[2],21,0).getTime(); rebuild(true); };
-$('bNow').onclick=()=>{when=Date.now();live=true;rebuild(true)};
+$('when').onchange=e=>{ const p=e.target.value.split('-').map(Number); if(p.length!==3||!p[0]) return; const n=new Date(); live=(p[0]===n.getFullYear()&&p[1]===n.getMonth()+1&&p[2]===n.getDate()); if(live) goLive(); else { moonless=false; when=new Date(p[0],p[1]-1,p[2],21,0).getTime(); } rebuild(true); };
+$('bNow').onclick=()=>{goLive();rebuild(true)};
 function paintMenu(){
   E=elong(when);
   const lit=Math.round((1-Math.cos(E*R))/2*100);
-  $('skyText').textContent=(live?'Tonight':fmtDay(when))+': '+phaseName(E).toLowerCase()+', '+lit+'% lit, day '+(E/360*SYN).toFixed(1)+'.';
-  const d=new Date(when); $('when').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  $('skyText').textContent=(live?'Tonight':fmtDay(when))+': '+phaseName(E).toLowerCase()+', '+lit+'% lit, day '+(E/360*SYN).toFixed(1)+'.'+(live?(moonless?' The moon is not up while it is dark tonight, so the list starts with what comes next.':when-Date.now()>20*60000?' Up after dark from about '+new Date(when).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})+'.':''):'');
+  const d=new Date(live?Date.now():when); $('when').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
   press($('bNow'),live); press($('bMirror'),mirror);
 }
 function counts(){
@@ -495,7 +518,7 @@ function paintSheet(){
 }
 $('bLog').onclick=()=>{$('menu').hidden=true;$('sheet').hidden=false;paintSheet()};
 $('bClose').onclick=()=>{$('sheet').hidden=true;paintCard();refly()};
-$('pLat').onchange=e=>{S.prefs.lat=e.target.value;save()}; $('pLon').onchange=e=>{S.prefs.lon=e.target.value;save()};
+$('pLat').onchange=e=>{S.prefs.lat=e.target.value;save();if(live){goLive();rebuild(true)}}; $('pLon').onchange=e=>{S.prefs.lon=e.target.value;save();if(live){goLive();rebuild(true)}};
 /* Export laid out like the Astronomical League submission sheet: one line per sheet row from 36 to 164, columns D to J. */
 const AL_FIRST=36, AL_LAST=164, AL_ROW=(()=>{const m={},add=(a,b,r)=>{for(let i=a;i<=b;i++)m['f'+String(i).padStart(3,'0')]=r+i-a};
   add(1,4,36);add(5,16,41);add(17,26,53);add(27,62,65);add(63,72,103);add(73,94,116);add(95,108,141);for(let i=1;i<=9;i++)m['o0'+i]=155+i;return m})();
