@@ -405,16 +405,18 @@ function setGeom(k){
     if(f.sites) f.sites.forEach((o,i)=>{const p=move(f.o.sites[i][0],f.o.sites[i][1]); o.x=p[0]; o.yy=p[1];});
   }
 }
-let phaseOn=S.prefs.view==='nasa', viewKey='photo', viewWant='photo';
+let phaseOn=S.prefs.phase!==false, viewKey='photo', viewWant='photo'; // the NASA view is the default
+/* Each view remembers its own Mirror setting. The NASA view starts mirrored, as a telescope with a star diagonal shows the moon. */
+const viewMirror=()=>viewKey==='photo'?S.prefs.mirror!==false:S.prefs.mirrorNasa!==false;
 function applyView(){
   const k=phaseOn?(((Math.round((E-6)/12)%30)+30)%30):null, key=k==null?'photo':'n'+k;
   viewWant=key; press($('bPhase'),phaseOn); if(key===viewKey) return;
   const src=k==null?'moon.jpg':'nasa/'+pad(k)+'.jpg', im=new Image();
-  im.onload=()=>{ if(viewWant!==key) return; $('moon').src=src; viewKey=key; setGeom(k); paintShade(); paintCard(); if(sized) refly(); };
+  im.onload=()=>{ if(viewWant!==key) return; $('moon').src=src; viewKey=key; mirror=viewMirror(); press($('bMirror'),mirror); setGeom(k); paintShade(); paintCard(); if(sized) refly(); };
   im.onerror=()=>{ if(viewWant!==key) return; phaseOn=false; applyView(); $('skyText').textContent+=' The phase image could not be loaded, so your photo is shown.'; };
   im.src=src;
 }
-$('bPhase').onclick=()=>{ phaseOn=!phaseOn; S.prefs.view=phaseOn?'nasa':'photo'; save(); applyView(); };
+$('bPhase').onclick=()=>{ phaseOn=!phaseOn; S.prefs.phase=phaseOn; save(); applyView(); };
 /* One finger on the moon swipes to the next target. After you pinch or scroll to zoom, one finger pans instead. */
 const ptrs=new Map(); let pinch=0, sx=0, sy=0, swiping=false, moved0=0;
 stage.addEventListener('pointerdown',e=>{ $('menu').hidden=true; stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
@@ -467,7 +469,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('dlg').hidden){
 /* ---------- menu ---------- */
 const press=(b,v)=>b.setAttribute('aria-pressed',v?'true':'false');
 const refly=()=>{const c=current();c?fly(c.f):fit(true)};
-$('bMirror').onclick=()=>{mirror=!mirror;S.prefs.mirror=mirror;save();press($('bMirror'),mirror);refly()};
+$('bMirror').onclick=()=>{mirror=!mirror;if(viewKey==='photo')S.prefs.mirror=mirror;else S.prefs.mirrorNasa=mirror;save();press($('bMirror'),mirror);refly()};
 $('bRot').onclick=()=>{rot=!rot;press($('bRot'),rot);refly()};
 $('bHl').onclick=()=>{showHl=!showHl;press($('bHl'),showHl);apply()};
 $('bFit').onclick=()=>{fit(true);$('menu').hidden=true};
