@@ -132,7 +132,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
 </style>
 </head>
 <body>
-<div id="stage" aria-label="Your moon photo, shaded as the moon will look on the chosen night, with the current target tinted. Swipe left or right for another target. Pinch or scroll to zoom.">
+<div id="stage" aria-label="Your moon photo, shaded as the moon will look on the chosen night, with the current target tinted. Drag to move the image. Pinch or scroll to zoom. Swipe the card below for another target.">
   <div id="pz"><div id="orient">
     <img id="moon" src="moon.jpg" alt="Full-disc photograph of the moon, north at the top">
     <svg id="ov" viewBox="0 0 1000 1000" aria-hidden="true">
@@ -417,23 +417,22 @@ function applyView(){
   im.src=src;
 }
 $('bPhase').onclick=()=>{ phaseOn=!phaseOn; S.prefs.phase=phaseOn; save(); applyView(); };
-/* One finger on the moon swipes to the next target. After you pinch or scroll to zoom, one finger pans instead. */
+/* One finger on the moon drags the image. Two fingers pinch to zoom. To change target, swipe the card or use its arrows. */
 const ptrs=new Map(); let pinch=0, sx=0, sy=0, swiping=false, moved0=0;
 stage.addEventListener('pointerdown',e=>{ $('menu').hidden=true; stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(ptrs.size===1){sx=e.clientX;sy=e.clientY;swiping=!manual;moved0=0;} else {swiping=false; const [a,b]=[...ptrs.values()]; pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);} });
+  if(ptrs.size===1){sx=e.clientX;sy=e.clientY;swiping=false;moved0=0;} else {swiping=false; const [a,b]=[...ptrs.values()]; pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);} });
 stage.addEventListener('pointermove',e=>{
   const p=ptrs.get(e.pointerId); if(!p) return;
   const dx=e.clientX-p[0], dy=e.clientY-p[1]; ptrs.set(e.pointerId,[e.clientX,e.clientY]);
   const r=stage.getBoundingClientRect();
-  if(ptrs.size===1&&!swiping){ tx+=dx; ty+=dy; apply(); }
+  if(ptrs.size===1){ if(!manual&&Math.hypot(e.clientX-sx,e.clientY-sy)>=8) manual=true; tx+=dx; ty+=dy; apply(); }
   else if(ptrs.size===2){ const [a,b]=[...ptrs.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1]); if(pinch) zoomAt((a[0]+b[0])/2-r.left,(a[1]+b[1])/2-r.top,z*d/pinch); pinch=d; }
 });
 function up(e){
   if(!ptrs.has(e.pointerId)) return;
   const one=ptrs.size===1; ptrs.delete(e.pointerId); pinch=0;
   if(one&&e.type==='pointerup'){ const dx=e.clientX-sx, dy=e.clientY-sy;
-    if(Math.hypot(dx,dy)<8){ const r=stage.getBoundingClientRect(); tapAt(e.clientX-r.left,e.clientY-r.top); }
-    else if(swiping&&Math.abs(dx)>45&&Math.abs(dx)>1.4*Math.abs(dy)) step(dx<0?1:-1); }
+    if(Math.hypot(dx,dy)<8){ const r=stage.getBoundingClientRect(); tapAt(e.clientX-r.left,e.clientY-r.top); } }
   swiping=false;
 }
 stage.addEventListener('pointerup',up); stage.addEventListener('pointercancel',up);
@@ -540,7 +539,7 @@ $('dlgF').addEventListener('submit',e=>{
   S.log[f.id]={date:$('dDate').value,time:$('dTime').value,seeing:$('dSee').value,transp:$('dTr').value,inst:$('dIn').value,notes:''};
   S.prefs.seeing=$('dSee').value; S.prefs.transp=$('dTr').value; if($('dIn').value!=='0') S.prefs.inst=$('dIn').value;
   const wasNew=!dlgWas; save(); closeDlg();
-  if(wasNew){ lastLogged=f.id; toast='Logged '+f.name+'. Swipe back to see it.'; pos=nextUnlogged(); } else { lastLogged=null; toast=''; }
+  if(wasNew){ lastLogged=f.id; toast='Logged '+f.name+'. Swipe the card back to see it.'; pos=nextUnlogged(); } else { lastLogged=null; toast=''; }
   paintCard(); refly();
 });
 function undo(){ if(!lastLogged) return; const id=lastLogged; delete S.log[id]; lastLogged=null; toast=''; save(); const i=queue.findIndex(q=>q.f.id===id); if(i>=0) pos=i; paintCard(); refly(); }
