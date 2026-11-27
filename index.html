@@ -132,7 +132,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
 </style>
 </head>
 <body>
-<div id="stage" aria-label="Your moon photo, shaded as the moon will look on the chosen night, with the current target tinted. Drag to move the image. Pinch or scroll to zoom. Swipe the card below for another target.">
+<div id="stage" aria-label="Your moon photo, shaded as the moon will look on the chosen night, with the current target tinted. Drag to move the image. Pinch or scroll to zoom. Twist with two fingers to turn it. Swipe the card below for another target.">
   <div id="pz"><div id="orient">
     <img id="moon" src="moon.jpg" alt="Full-disc photograph of the moon, north at the top">
     <svg id="ov" viewBox="0 0 1000 1000" aria-hidden="true">
@@ -153,6 +153,7 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
       <div class="mrow">
         <button class="tog" id="bMirror" aria-pressed="true" title="Flip left to right, as a telescope with a star diagonal shows it. Turn off for the naked-eye view.">Mirror (telescope view)</button>
         <button class="tog" id="bRot" aria-pressed="false" title="Turn the map upside down">Rotate</button>
+        <button class="tog" id="bStraight" title="Undo any two-finger turn so the moon sits straight again">Straighten</button>
         <button class="tog" id="bPhase" aria-pressed="false" title="Swap your photo for a NASA render lit as the moon is on the chosen night, with real shadows">Phase view (NASA)</button>
         <button class="tog" id="bHl" aria-pressed="true" title="Show or hide the coloured tint on the target">Highlight</button>
         <button class="tog" id="bFit" title="Show the whole moon">Whole moon</button>
@@ -344,26 +345,30 @@ function nextUnlogged(){ for(let k=1;k<=queue.length;k++){ const i=(pos+k)%queue
 
 /* ---------- map ---------- */
 const stage=$('stage'), pz=$('pz'), orient=$('orient'), hl=$('hl'), card=$('card');
-let W=1,Hs=1,z=1,tx=0,ty=0,mirror=S.prefs.mirror!==false,rot=false,showHl=true,manual=false,hold=false;
+let W=1,Hs=1,z=1,tx=0,ty=0,mirror=S.prefs.mirror!==false,rot=false,ang=0,showHl=true,manual=false,hold=false;
 const zmin=()=>Math.min(W,Hs)/W;
 function clamp(){
   z=Math.max(zmin(),Math.min(6,z)); const c=W*z;
   tx = c<=W ? (W-c)/2 : Math.min(0,Math.max(W-c,tx));
   ty = c<=Hs ? (Hs-c)/2 : Math.min(0,Math.max(Hs-c,ty));
 }
-function local(f){let x=f.nx,y=f.ny; if(mirror)x=1-x; if(rot){x=1-x;y=1-y;} return [x,y]}
+/* The map can be mirrored, flipped 180 degrees and twisted by any angle with two fingers. These convert between a spot on the image and where it shows. */
+const turn=()=>ang+(rot?Math.PI:0);
+function toView(x,y){ if(mirror)x=1-x; const t=turn(), c=Math.cos(t), s=Math.sin(t), dx=x-.5, dy=y-.5; return [.5+dx*c-dy*s, .5+dx*s+dy*c]; }
+function fromView(x,y){ const t=-turn(), c=Math.cos(t), s=Math.sin(t), dx=x-.5, dy=y-.5; let X=.5+dx*c-dy*s; const Y=.5+dx*s+dy*c; if(mirror)X=1-X; return [X,Y]; }
+function local(f){ return toView(f.nx,f.ny) }
 function apply(anim){
   clamp();
   pz.classList.toggle('anim',!!anim);
   pz.style.width=W+'px'; pz.style.height=W+'px';
   pz.style.transform=`translate(${tx}px,${ty}px) scale(${z})`;
-  orient.style.transform=(rot?'rotate(180deg) ':'')+(mirror?'scaleX(-1)':'');
+  orient.style.transform='rotate('+turn().toFixed(4)+'rad) '+(mirror?'scaleX(-1)':'');
   const u=1000/(W*z), c=current(), f=c&&c.f;
   if(f&&f.shape&&showHl){
     hl.hidden=false; hl.setAttribute('d',f.shape.d); hl.setAttribute('class',f.shape.t+' '+f.tier+(S.log[f.id]?' done':''));
     hl.style.strokeWidth = f.shape.t==='l' ? Math.max(f.shape.w,6*u) : 1.8*u;
   } else hl.hidden=true;
-  const ps=[...pz.querySelectorAll('.site')].map(p=>{ let x=+p.dataset.x,y=+p.dataset.y; if(mirror)x=1-x; if(rot){x=1-x;y=1-y;} p.style.left=(x*100)+'%'; p.style.top=(y*100)+'%'; p.style.transform='scale('+(1/z)+')'; p.hidden=!showHl; return {p,sx:x*W*z,sy:y*W*z}; }).sort((a,b)=>a.sy-b.sy);
+  const ps=[...pz.querySelectorAll('.site')].map(p=>{ const [x,y]=toView(+p.dataset.x,+p.dataset.y); p.style.left=(x*100)+'%'; p.style.top=(y*100)+'%'; p.style.transform='scale('+(1/z)+')'; p.hidden=!showHl; return {p,sx:x*W*z,sy:y*W*z}; }).sort((a,b)=>a.sy-b.sy);
   const done=[]; for(const o of ps){ let ly=o.sy; for(const d of done) if(Math.abs(d.sx-o.sx)<34&&ly<d.ly+19&&ly>d.ly-19) ly=d.ly+19; o.ly=ly; done.push(o); o.p.lastChild.style.top=(ly-o.sy-9)+'px'; }
 }
 function fit(anim){ manual=false; hold=false; z=zmin(); tx=0; ty=0; apply(anim); }
@@ -374,6 +379,7 @@ function fly(f){
   const [x,y]=local(f); tx=W/2-x*W*z; ty=Hs/2-y*W*z; apply(true);
 }
 function zoomAt(px,py,nz){ manual=true; nz=Math.max(zmin(),Math.min(6,nz)); tx=px-(px-tx)*(nz/z); ty=py-(py-ty)*(nz/z); z=nz; apply(); }
+function rotateAt(px,py,d){ manual=true; const h=W*z/2, ux=px-tx-h, uy=py-ty-h, c=Math.cos(d), s=Math.sin(d); tx=px-h-(ux*c-uy*s); ty=py-h-(ux*s+uy*c); ang+=d; apply(); }
 let sized=false;
 new ResizeObserver(()=>{ const r=stage.getBoundingClientRect(); W=r.width; Hs=r.height; if(!sized){sized=true; fit(false); const c=current(); if(c) setTimeout(()=>fly(c.f),350);} else { const c=current(); (manual||hold)?apply():(c?fly(c.f):fit()); } }).observe(stage);
 function paintShade(){
@@ -417,20 +423,23 @@ function applyView(){
   im.src=src;
 }
 $('bPhase').onclick=()=>{ phaseOn=!phaseOn; S.prefs.phase=phaseOn; save(); applyView(); };
-/* One finger on the moon drags the image. Two fingers pinch to zoom. To change target, swipe the card or use its arrows. */
-const ptrs=new Map(); let pinch=0, sx=0, sy=0, swiping=false, moved0=0;
+/* One finger on the moon drags the image. Two fingers pinch to zoom and twist to turn the moon. To change target, swipe the card or use its arrows. */
+const ptrs=new Map(); let twist0=null, twistSum=0, twisting=false, pinch=0, sx=0, sy=0, swiping=false, moved0=0;
 stage.addEventListener('pointerdown',e=>{ $('menu').hidden=true; stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.clientX,e.clientY]);
-  if(ptrs.size===1){sx=e.clientX;sy=e.clientY;swiping=false;moved0=0;} else {swiping=false; const [a,b]=[...ptrs.values()]; pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);} });
+  if(ptrs.size===1){sx=e.clientX;sy=e.clientY;swiping=false;moved0=0;} else {swiping=false; const [a,b]=[...ptrs.values()]; pinch=Math.hypot(a[0]-b[0],a[1]-b[1]); twist0=Math.atan2(b[1]-a[1],b[0]-a[0]); twistSum=0; twisting=false;} });
 stage.addEventListener('pointermove',e=>{
   const p=ptrs.get(e.pointerId); if(!p) return;
   const dx=e.clientX-p[0], dy=e.clientY-p[1]; ptrs.set(e.pointerId,[e.clientX,e.clientY]);
   const r=stage.getBoundingClientRect();
   if(ptrs.size===1){ if(!manual&&Math.hypot(e.clientX-sx,e.clientY-sy)>=8) manual=true; tx+=dx; ty+=dy; apply(); }
-  else if(ptrs.size===2){ const [a,b]=[...ptrs.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1]); if(pinch) zoomAt((a[0]+b[0])/2-r.left,(a[1]+b[1])/2-r.top,z*d/pinch); pinch=d; }
+  else if(ptrs.size===2){ const [a,b]=[...ptrs.values()], d=Math.hypot(a[0]-b[0],a[1]-b[1]); const mx=(a[0]+b[0])/2-r.left, my=(a[1]+b[1])/2-r.top;
+    if(pinch) zoomAt(mx,my,z*d/pinch); pinch=d;
+    // twist: ignore the first few degrees so an ordinary pinch does not turn the moon
+    const t=Math.atan2(b[1]-a[1],b[0]-a[0]); if(twist0!=null){ let dt=t-twist0; dt=Math.atan2(Math.sin(dt),Math.cos(dt)); if(twisting) rotateAt(mx,my,dt); else { twistSum+=dt; if(Math.abs(twistSum)>0.12) twisting=true; } } twist0=t; }
 });
 function up(e){
   if(!ptrs.has(e.pointerId)) return;
-  const one=ptrs.size===1; ptrs.delete(e.pointerId); pinch=0;
+  const one=ptrs.size===1; ptrs.delete(e.pointerId); pinch=0; twist0=null; twisting=false;
   if(one&&e.type==='pointerup'){ const dx=e.clientX-sx, dy=e.clientY-sy;
     if(Math.hypot(dx,dy)<8){ const r=stage.getBoundingClientRect(); tapAt(e.clientX-r.left,e.clientY-r.top); } }
   swiping=false;
@@ -439,7 +448,7 @@ stage.addEventListener('pointerup',up); stage.addEventListener('pointercancel',u
 stage.addEventListener('wheel',e=>{e.preventDefault(); const r=stage.getBoundingClientRect(); zoomAt(e.clientX-r.left,e.clientY-r.top,z*Math.exp(-e.deltaY*0.0016));},{passive:false});
 /* tap a feature on the moon to bring up its card */
 function tapAt(px,py){
-  let x=(px-tx)/(W*z), y=(py-ty)/(W*z); if(mirror)x=1-x; if(rot){x=1-x;y=1-y;}
+  const [x,y]=fromView((px-tx)/(W*z),(py-ty)/(W*z));
   if(x<0||x>1||y<0||y>1) return;
   const probe=$('probe'), pt=$('ov').createSVGPoint(); pt.x=x*1000; pt.y=y*1000;
   let best=null;
@@ -470,6 +479,7 @@ const press=(b,v)=>b.setAttribute('aria-pressed',v?'true':'false');
 const refly=()=>{const c=current();c?fly(c.f):fit(true)};
 $('bMirror').onclick=()=>{mirror=!mirror;if(viewKey==='photo')S.prefs.mirror=mirror;else S.prefs.mirrorNasa=mirror;save();press($('bMirror'),mirror);refly()};
 $('bRot').onclick=()=>{rot=!rot;press($('bRot'),rot);refly()};
+$('bStraight').onclick=()=>{ang=0;refly()};
 $('bHl').onclick=()=>{showHl=!showHl;press($('bHl'),showHl);apply()};
 $('bFit').onclick=()=>{fit(true);$('menu').hidden=true};
 $('bNight').onclick=()=>{press($('bNight'),document.documentElement.classList.toggle('night'))};
