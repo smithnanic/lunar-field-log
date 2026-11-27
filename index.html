@@ -185,8 +185,8 @@ html.night #moon{filter:grayscale(1) brightness(.55) sepia(1) saturate(7) hue-ro
       <label>Latitude<input id="pLat"></label>
       <label>Longitude<input id="pLon"></label>
     </div>
-    <div class="actions"><button class="btn ghost" id="bCsv">Copy log as CSV</button></div>
-    <textarea id="csv" hidden readonly aria-label="Log as CSV"></textarea>
+    <div class="actions"><button class="btn ghost" id="bCsv">Copy log for the League sheet</button></div>
+    <textarea id="csv" hidden readonly aria-label="Log laid out for the League sheet"></textarea>
     <p class="note" id="csvNote"></p>
     <p class="note" id="sync">Saved in this browser.</p>
   </div>
@@ -496,13 +496,24 @@ function paintSheet(){
 $('bLog').onclick=()=>{$('menu').hidden=true;$('sheet').hidden=false;paintSheet()};
 $('bClose').onclick=()=>{$('sheet').hidden=true;paintCard();refly()};
 $('pLat').onchange=e=>{S.prefs.lat=e.target.value;save()}; $('pLon').onchange=e=>{S.prefs.lon=e.target.value;save()};
+/* Export laid out like the Astronomical League submission sheet: one line per sheet row from 36 to 164, columns D to J. */
+const AL_FIRST=36, AL_LAST=164, AL_ROW=(()=>{const m={},add=(a,b,r)=>{for(let i=a;i<=b;i++)m['f'+String(i).padStart(3,'0')]=r+i-a};
+  add(1,4,36);add(5,16,41);add(17,26,53);add(27,62,65);add(63,72,103);add(73,94,116);add(95,108,141);for(let i=1;i<=9;i++)m['o0'+i]=155+i;return m})();
+const AL_HEAD={63:1,101:1,139:1}, AL_SUB={64:1,102:1,140:1};
+function leagueBlock(){
+  const rows={}; for(const f of F){const e=S.log[f.id], r=AL_ROW[f.id]; if(e&&r) rows[r]=[e.date,e.time,e.seeing,e.transp,e.inst,S.prefs.lat,S.prefs.lon];}
+  const clean=v=>String(v==null?'':v).replace(/[\t\r\n]+/g,' '), out=[];
+  for(let r=AL_FIRST;r<=AL_LAST;r++){
+    const c=AL_HEAD[r]?['Date','Time','Seeing','Transp.','Inst.','Latitude','Longitude']:AL_SUB[r]?['','','E, VG, G, F, P','1-worst to 6-best','By #','','']:rows[r]||['','','','','','',''];
+    out.push(c.map(clean).join('\t'));
+  }
+  return out.join('\n');
+}
 $('bCsv').onclick=async()=>{
-  const q=s=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
-  const lines=[['Feature','Date','Time','Seeing','Transp.','Inst.','Latitude','Longitude'].map(q).join(',')];
-  for(const f of F) if(S.log[f.id]){const e=S.log[f.id]; lines.push([f.name,e.date,e.time,e.seeing,e.transp,e.inst,S.prefs.lat,S.prefs.lon].map(q).join(','));}
-  const txt=lines.join('\n'), ta=$('csv'); ta.value=txt; ta.hidden=false;
-  try{await navigator.clipboard.writeText(txt); $('csvNote').textContent='Copied. Paste it into your spreadsheet.';}
-  catch(err){ta.select(); $('csvNote').textContent='Copying was blocked, so the text is shown above. Select it and copy.';}
+  const txt=leagueBlock(), ta=$('csv'); ta.value=txt; ta.hidden=false;
+  const where='Open your Lunar Observing Program sheet, click cell D36 and paste. Every entry lands on its own feature row.';
+  try{await navigator.clipboard.writeText(txt); $('csvNote').textContent='Copied. '+where;}
+  catch(err){ta.select(); $('csvNote').textContent='Copying was blocked, so the text is shown above. Select it all and copy. '+where;}
 };
 
 
